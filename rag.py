@@ -2,29 +2,36 @@ from langchain import PromptTemplate
 from langchain.llms import CTransformers
 from langchain.chains import RetrievalQA
 from langchain.embeddings import SentenceTransformerEmbeddings
-from fastapi import FastAPI, Request, Form, Response
+from fastapi import FastAPI, Request, Form, Response, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.encoders import jsonable_encoder
 from qdrant_client import QdrantClient
 from langchain.vectorstores import Qdrant
-import os
+
 import json
+from huggingface_hub import login
+from langchain.document_loaders import PyPDFLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+from dotenv import load_dotenv
+load_dotenv()
+import os
+login(token=os.environ["HF_TOKEN"])
+
+print("HF_TOKEN:", os.environ.get("HF_TOKEN"))
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-local_llm = "meditron-7b.Q4_K_M.gguf"
+local_llm = "TheBloke/meditron-7B-GGUF"
 
 config = {
 'max_new_tokens': 1024,
 'context_length': 2048,
 'repetition_penalty': 1.1,
-'temperature': 0.1,
-'top_k': 50,
-'top_p': 0.9,
 'stream': True,
 'threads': int(os.cpu_count() / 2)
 }
@@ -62,6 +69,13 @@ prompt = PromptTemplate(template=prompt_template, input_variables=['context', 'q
 
 retriever = db.as_retriever(search_kwargs={"k":1})
 
+def process_pdf_and_add_to_db(file_path, db, embeddings):
+    loader = PyPDFLoader(file_path)
+    documents = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    texts = text_splitter.split_documents(documents)
+    db.add_documents(texts)
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -79,3 +93,11 @@ async def get_response(query: str = Form(...)):
     
     res = Response(response_data)
     return res
+
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    file_location = f"data/{file.filename}"
+    with open(file_location, "wb") as f:
+        f.write(await file.read())
+    process_pdf_and_add_to_db(file_location, db, embeddings)
+    return {"info": f"file '{file.filename}' saved and processed."}

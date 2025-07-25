@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Investment Banking Chatbot</title>
+    <title>Medical Chatbot</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -88,6 +88,12 @@
                 <div id="response" class="chat-response"></div>
             </div>
         </div>
+        <div class="mb-3">
+            <label for="fileInput" class="form-label">Upload your document</label>
+            <input class="form-control" type="file" id="fileInput" accept=".pdf">
+            <button id="uploadBtn" class="btn btn-primary mt-2">Upload</button>
+            <div id="uploadStatus" style="margin-top:10px;"></div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -108,10 +114,31 @@
                 }
 
                 const data = await response.json();
-                document.getElementById('response').innerHTML = `<p>${data.answer}</p><br><pre><b>Context: </b> ${data.source_document}</pre><br><pre><b>Source Document: </b> ${data.doc}</pre>`;
+                document.getElementById('response').innerHTML = `<p>${data.answer}</p>`;
             } catch (error) {
                 console.error('Error:', error);
                 document.getElementById('response').innerHTML = '<p>Error processing your request</p>';
+            }
+        });
+
+        document.getElementById('uploadBtn').addEventListener('click', async function() {
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files.length === 0) {
+                document.getElementById('uploadStatus').innerText = "Please select a file.";
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            document.getElementById('uploadStatus').innerText = "Uploading...";
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (!response.ok) throw new Error('Upload failed');
+                document.getElementById('uploadStatus').innerText = "Upload successful!";
+            } catch (error) {
+                document.getElementById('uploadStatus').innerText = "Error uploading file.";
             }
         });
 
