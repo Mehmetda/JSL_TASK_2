@@ -22,11 +22,18 @@ def clear_cache():
     except Exception as e:
         return False
 
-st.set_page_config(page_title="Medical RAG QA App", page_icon="🏥")
+st.set_page_config(page_title="Medical RAG QA App", page_icon="🏥", layout="wide")
 
 with st.sidebar:
-    st.image("jsl_logo.svg", width=200)
+    st.image("F:/RAG_APP/jsl_logo.svg", width=200)
     st.selectbox("Choose LLM Type", ["gpt-4o", "gpt-3.5-turbo", "gpt-4"], index=0)
+    
+    # LLM Configuration
+    st.markdown("---")
+    st.markdown("### Configure LLM Type")
+    
+    re_rank_retrievals = st.checkbox("Re-Rank Retrievals", value=True)
+    bm25_enabled = st.checkbox("BM25", value=False)
     
     # RAG Parametreleri
     st.markdown("---")
@@ -36,8 +43,7 @@ with st.sidebar:
         "Select Top K values", 
         min_value=1, 
         max_value=50, 
-        value=5,
-        help="Vektör veritabanından kaç doküman alınacağı"
+        value=5
     )
     
     score_threshold = st.slider(
@@ -45,8 +51,7 @@ with st.sidebar:
         min_value=0.1, 
         max_value=1.0, 
         value=0.3,
-        step=0.1,
-        help="Minimum benzerlik skoru (0.1-1.0)"
+        step=0.1
     )
 
 st.title("Medical RAG QA App")
@@ -74,29 +79,49 @@ st.markdown("---")
 
 question = st.text_area("Question:", placeholder="Example: What are the symptoms of diabetes?", height=100)
 
+# Top buttons row
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    if st.button("Submit", type="primary"):
+    if st.button("Start Process", type="primary"):
         if question.strip():
             with st.spinner("Processing..."):
                 try:
-                    response = query_system(question, top_k, score_threshold)
+                    response = query_system(question, top_k, score_threshold, re_rank_retrievals, bm25_enabled)
                     
                     if "error" in response:
                         st.error(f"Error: {response['error']}")
                     else:
-                        st.markdown("### Answer")
+                        # LLM Response - Full width
+                        st.markdown("### See LLM Response")
                         st.write(response.get("answer", "No answer found"))
                         
-                        if response.get("source_document"):
-                            st.markdown("---")
-                            st.markdown("### Context:")
-                            st.write(response.get("source_document", ""))
+                        # Two columns below - Equal width
+                        col1, col2 = st.columns(2)
                         
-                        if response.get("doc"):
-                            st.markdown("**Source Document:**")
-                            st.code(response.get("doc", ""), language="text")
+                        with col1:
+                            with st.container():
+                                with st.expander("See Retrieval Metadata", expanded=True):
+                                    st.json(response.get("metadata", {}))
+                        
+                        with col2:
+                            with st.container():
+                                with st.expander("See Patient Documents", expanded=True):
+                                    if response.get("available_pdfs"):
+                                        st.selectbox("Choose PDF File", response.get("available_pdfs", []))
+                                    
+                                    if response.get("document_summary"):
+                                        for key, value in response.get("document_summary", {}).items():
+                                            if value:
+                                                st.write(f"**{key.replace('_', ' ').title()}:** {value}")
+                                    
+                                    if response.get("source_document"):
+                                        st.write("**Document Content:**")
+                                        st.write(response.get("source_document", ""))
+                                    
+                                    if response.get("doc"):
+                                        st.write("**Source File:**")
+                                        st.code(response.get("doc", ""), language="text")
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
         else:
